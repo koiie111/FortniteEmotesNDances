@@ -158,6 +158,21 @@ public partial class Plugin
         return g_EmoteTransMap.ContainsKey(name) ? g_EmoteTransMap[name] : name;
     }
 
+    public Emote? GetEmoteBySelector(string selector, bool emote)
+    {
+        if (int.TryParse(selector, out var number))
+        {
+            if (number < 1)
+                return null;
+
+            return Config.EmoteDances
+                .Where(item => item.IsEmote == emote)
+                .ElementAtOrDefault(number - 1);
+        }
+
+        return GetEmoteByName(selector, emote, true);
+    }
+
     public Emote? GetEmoteByName(string name, bool emote, bool partial = false)
     {
         if (partial)

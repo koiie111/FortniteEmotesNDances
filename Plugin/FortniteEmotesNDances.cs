@@ -77,7 +77,7 @@ public partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
 
         foreach (var emoteCommand in Config.EmoteCommand)
         {
-            RegisterCommand(emoteCommand, "List all the available emotes", (CCSPlayerController? player, CommandInfo command) =>
+            RegisterCommand(emoteCommand, "List emotes or play one by name/number", (CCSPlayerController? player, CommandInfo command) =>
             {
                 if (player == null)
                     return;
@@ -101,7 +101,7 @@ public partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
 
                 string emote = command.GetArg(1);
 
-                var emoteObj = GetEmoteByName(emote, true, true);
+                var emoteObj = GetEmoteBySelector(emote, true);
 
                 if (emoteObj == null)
                 {
@@ -118,7 +118,7 @@ public partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
 
         foreach (var danceCommand in Config.DanceCommand)
         {
-            RegisterCommand(danceCommand, "List all the available dances", (CCSPlayerController? player, CommandInfo command) =>
+            RegisterCommand(danceCommand, "List dances or play one by name/number", (CCSPlayerController? player, CommandInfo command) =>
             {
                 if (player == null)
                     return;
@@ -142,7 +142,7 @@ public partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
 
                 string dance = command.GetArg(1);
 
-                var danceObj = GetEmoteByName(dance, false, true);
+                var danceObj = GetEmoteBySelector(dance, false);
 
                 if (danceObj == null)
                 {

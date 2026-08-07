@@ -13,6 +13,8 @@ This plugin allows players to use Emotes & Dances just like Fortnite.
 ## Commands
 - `css_emotes` - Open emotes menu.
 - `css_dances` - Open dances menu.
+- `css_emotes <number>` - Play an emote by its 1-based position in the emotes list (for example, `bind x "css_emotes 1"`).
+- `css_dances <number>` - Play a dance by its 1-based position in the dances list.
 - `css_etriggers` - Print all chat triggers for emotes/dances in chat.
 - `css_setemote <name/#userid> emoteName` (`@css/root` required)
 - `css_setdance <name/#userid> danceName` (`@css/root` required)
