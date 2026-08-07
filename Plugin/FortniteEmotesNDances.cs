@@ -53,6 +53,7 @@ public partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
             Logger.LogWarning("Configuration version mismatch (Expected: {0} | Current: {1})", Config.Version, config.Version);
         }
 
+        LoadBundledEmoteCatalog(config);
         Config = config;
 
         g_EmoteTransMap = new();

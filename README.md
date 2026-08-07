@@ -33,6 +33,8 @@ This fork replaces per-emote CounterStrikeSharp permissions and VIP/group access
 
 The `css_emotes` and `css_dances` menus show only entries currently available to that player.
 
+If `EmoteDances` is empty in the generated CounterStrikeSharp configuration, the plugin automatically loads the complete 80-entry catalog shipped next to the plugin DLL.
+
 Configure the connection in `configs/plugins/FortniteEmotesNDances/FortniteEmotesNDances.json`:
 
 ```json

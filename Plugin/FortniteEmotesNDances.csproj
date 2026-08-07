@@ -44,6 +44,7 @@
     </ProjectReference>
     <ProjectReference Include="..\RayTraceApi\RayTraceApi.csproj" />
     <None Update="lang\**\*.*" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="FortniteEmotesCatalog.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
