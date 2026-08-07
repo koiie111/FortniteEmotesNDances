@@ -13,7 +13,7 @@
 
   <Target Name="CopyConfigFiles" AfterTargets="Build">
 		<ItemGroup>
-			<FilesToCopy Include="bin\Debug\net8.0\RayTraceApi.dll" />
+			<FilesToCopy Include="bin\$(Configuration)\net8.0\RayTraceApi.dll" />
 		</ItemGroup>
 		<Copy SourceFiles="@(FilesToCopy)" DestinationFolder="..\Plugin\FortniteEmotesNDances\shared\RayTraceApi" />
 	</Target>

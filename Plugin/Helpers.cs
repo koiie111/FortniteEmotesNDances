@@ -74,7 +74,7 @@ public partial class Plugin
         }
     }
 
-    public bool PlayEmote(CCSPlayerController target, Emote emote, ref string error, CCSPlayerController? player = null)
+    public bool PlayEmote(CCSPlayerController target, Emote emote, ref string error, CCSPlayerController? player = null, bool bypassAccess = false)
     {
         switch (Config.EmoteAllowedPeriod)
         {
@@ -109,6 +109,12 @@ public partial class Plugin
         }
 
         var steamID = target.SteamID;
+
+        if (!bypassAccess && !HasPurchasedAccess(steamID, emote))
+        {
+            error = $" {Localizer.ForPlayer(target, "emote.prefix")} {Localizer.ForPlayer(target, "emote.no-access")}";
+            return false;
+        }
 
         if (!g_PlayerSettings.ContainsKey(steamID))
             g_PlayerSettings[steamID] = new PlayerSettings();
@@ -259,8 +265,7 @@ public partial class Plugin
 
         if (player == null)
         {
-            bool hasVIP = HasPermision(target, Config.VIPPerm);
-            float cdTime = hasVIP ? Config.EmoteVIPCooldown : Config.EmoteCooldown;
+            float cdTime = Config.EmoteCooldown;
             if (cdTime <= 0)
             {
                 cdTime = 0.1f;

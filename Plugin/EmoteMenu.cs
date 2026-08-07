@@ -37,7 +37,7 @@ public partial class Plugin
             else if (!isDance && !emote.IsEmote)
                 continue;
 
-            bool hasPerm = HasPermision(player, emote.Permission);
+            bool hasPerm = HasPurchasedAccess(player, emote);
 
             items.Add(new MenuItem(hasPerm ? MenuItemType.Button : MenuItemType.Text, [new MenuValue(Localizer.ForPlayer(player, emote.Name))]));
             emoteMap[i++] = Localizer.ForPlayer(player, emote.Name);
@@ -102,7 +102,7 @@ public partial class Plugin
             else if (!isDance && !emote.IsEmote)
                 continue;
 
-            bool hasPerm = HasPermision(player, emote.Permission);
+            bool hasPerm = HasPurchasedAccess(player, emote);
 
             string emoteName = $"{Localizer.ForPlayer(player, $"{emote.Name}")}";
 
@@ -143,7 +143,7 @@ public partial class Plugin
             else if (!isDance && !emote.IsEmote)
                 continue;
 
-            bool hasPerm = HasPermision(player, emote.Permission);
+            bool hasPerm = HasPurchasedAccess(player, emote);
 
             string emoteName = $"{Localizer.ForPlayer(player, $"{emote.Name}")}";
 

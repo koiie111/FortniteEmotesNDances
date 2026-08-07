@@ -6,6 +6,9 @@ namespace FortniteEmotes;
 
 public partial class PluginConfig : BasePluginConfig
 {
+    [JsonPropertyName("Database")]
+    public DatabaseConfig Database { get; set; } = new();
+
     [JsonPropertyName("EmoteAllowedPeriod")]
     public int EmoteAllowedPeriod { get; set; } = 0;
 
@@ -33,23 +36,14 @@ public partial class PluginConfig : BasePluginConfig
     [JsonPropertyName("EmoteCooldown")]
     public int EmoteCooldown { get; set; } = 20;
 
-    [JsonPropertyName("EmoteVIPCooldown")]
-    public int EmoteVIPCooldown { get; set; } = 15;
-
     [JsonPropertyName("EmoteCancelButtons")]
     public string EmoteCancelButtons { get; set; } = "w,s,a,d,jump,crouch,leftclick";
 
     [JsonPropertyName("EmoteSoundEventFiles")]
     public List<string> EmoteSoundEventFiles { get; set; } = new();
 
-    [JsonPropertyName("EmoteDanceCommandPerm")]
-    public List<string> EmoteDanceCommandPerm { get; set; } = new() { "" };
-
     [JsonPropertyName("AdminSetEmoteDanceCommandPerm")]
     public List<string> AdminSetEmoteDanceCommandPerm { get; set; } = new() { "@css/root" };
-
-    [JsonPropertyName("VIPPerm")]
-    public List<string> VIPPerm { get; set; } = new() { "@css/vip" };
 
     [JsonPropertyName("SoundModuleEnabled")]
     public bool SoundModuleEnabled { get; set; } = true;
@@ -85,5 +79,26 @@ public partial class PluginConfig : BasePluginConfig
     public bool CameraBlockObject { get; set; } = true;
 
     [JsonPropertyName("ConfigVersion")]
-    public override int Version { get; set; } = 5;
+    public override int Version { get; set; } = 6;
+}
+
+public sealed class DatabaseConfig
+{
+    [JsonPropertyName("Host")]
+    public string Host { get; set; } = "127.0.0.1";
+
+    [JsonPropertyName("Port")]
+    public uint Port { get; set; } = 3306;
+
+    [JsonPropertyName("User")]
+    public string User { get; set; } = "root";
+
+    [JsonPropertyName("Password")]
+    public string Password { get; set; } = "";
+
+    [JsonPropertyName("DatabaseName")]
+    public string DatabaseName { get; set; } = "cs2admin";
+
+    [JsonPropertyName("AccessCacheSeconds")]
+    public int AccessCacheSeconds { get; set; } = 30;
 }

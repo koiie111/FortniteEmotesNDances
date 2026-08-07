@@ -34,6 +34,7 @@
       <IncludeAssets>compile; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="8.0.0" />
+    <PackageReference Include="MySqlConnector" Version="2.3.7" />
 
     <Reference Include="KitsuneMenu">
       <HintPath>FortniteEmotesNDances/shared/KitsuneMenu/KitsuneMenu.dll</HintPath>

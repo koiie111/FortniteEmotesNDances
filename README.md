@@ -23,6 +23,26 @@ This plugin allows players to use Emotes & Dances just like Fortnite.
 - [MultiAddonManager](https://github.com/Source2ZE/MultiAddonManager/releases/latest)
 - [Ray-Trace](https://github.com/FUNPLAY-pro-CS2/Ray-Trace/releases/latest) (`RayTraceImpl` plugin not needed)
 - [CSSharpPatcher](https://github.com/samyycX/CSSharpPatcher) (optional but recommended to fix volume)
+- MySQL/MariaDB with the `fortnite_emotes_access` table from the accompanying website migration
+
+## Purchased access
+
+This fork replaces per-emote CounterStrikeSharp permissions and VIP/group access with database purchases. A player may use an emote or dance only when `fortnite_emotes_access` contains a non-expired row matching the player's SteamID64 and the emote's canonical config `Name` (stored in the `model` column). Admin `setemote` and `setdance` commands intentionally bypass the purchase check.
+
+Configure the connection in `configs/plugins/FortniteEmotesNDances/FortniteEmotesNDances.json`:
+
+```json
+"Database": {
+  "Host": "127.0.0.1",
+  "Port": 3306,
+  "User": "root",
+  "Password": "change-me",
+  "DatabaseName": "cs2admin",
+  "AccessCacheSeconds": 30
+}
+```
+
+`expires` is a Unix timestamp. Set it to `0` for permanent access. Newly purchased access becomes visible after `AccessCacheSeconds` (30 seconds by default).
 
 ## Installation
 - After installing all the dependencies, drag and drop this plugin's latest release under `addons/counterstrikesharp`

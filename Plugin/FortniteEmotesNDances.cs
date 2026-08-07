@@ -19,8 +19,8 @@ public partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
 {
     public override string ModuleName => "Fortnite Emotes & Dances";
     public override string ModuleDescription => "CS2 Port of Fortnite Emotes & Dances";
-    public override string ModuleAuthor => "Cruze (https://github.com/cruze03)";
-    public override string ModuleVersion => "1.1.7-fix";
+    public override string ModuleAuthor => "Cruze; database access fork by koiie111";
+    public override string ModuleVersion => "1.1.7-db-access";
 
     public required PluginConfig Config { get; set; } = new();
 
@@ -82,14 +82,6 @@ public partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
                 if (player == null)
                     return;
 
-                bool bAccess = HasPermision(player, Config.EmoteDanceCommandPerm);
-
-                if (!bAccess)
-                {
-                    player.PrintToChat($" {Localizer.ForPlayer(player, "emote.prefix")} {Localizer.ForPlayer(player, "emote.command.no-permission")}");
-                    return;
-                }
-
                 if (command.ArgCount == 1)
                 {
                     switch (Config.EmoteMenuType)
@@ -130,14 +122,6 @@ public partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
             {
                 if (player == null)
                     return;
-
-                bool bAccess = HasPermision(player, Config.EmoteDanceCommandPerm);
-
-                if (!bAccess)
-                {
-                    player.PrintToChat($" {Localizer.ForPlayer(player, "emote.prefix")} {Localizer.ForPlayer(player, "emote.command.no-permission")}");
-                    return;
-                }
 
                 if (command.ArgCount == 1)
                 {
@@ -221,7 +205,7 @@ public partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
                     if (CanTarget(player, target))
                     {
                         string error = "";
-                        if (PlayEmote(target, emoteObj, ref error, player))
+                        if (PlayEmote(target, emoteObj, ref error, player, true))
                             count++;
                     }
                 });
@@ -278,7 +262,7 @@ public partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
                     if (CanTarget(player, target))
                     {
                         string error = "";
-                        if (PlayEmote(target, danceObj, ref error, player))
+                        if (PlayEmote(target, danceObj, ref error, player, true))
                             count++;
                     }
                 });
@@ -354,6 +338,7 @@ public partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
 
         Menu_OnLoad();
         API_OnLoad();
+        InitializeDatabaseAccess();
 
         EmotesEnable.ValueChanged += (sender, value) =>
         {
@@ -470,16 +455,7 @@ public partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
         {
             if (trigger.Value.Any(message.Equals))
             {
-                bool hasPerm = HasPermision(player, Config.EmoteDanceCommandPerm);
-                if (!hasPerm)
-                {
-                    player.PrintToChat($" {Localizer.ForPlayer(player, "emote.prefix")} {Localizer.ForPlayer(player, "emote.no-access")}");
-                    return HookResult.Stop;
-                }
-
-                hasPerm = HasPermision(player, trigger.Key.Permission);
-
-                if (!hasPerm)
+                if (!HasPurchasedAccess(player, trigger.Key))
                 {
                     player.PrintToChat($" {Localizer.ForPlayer(player, "emote.prefix")} {Localizer.ForPlayer(player, "emote.no-access")}");
                     return HookResult.Stop;
