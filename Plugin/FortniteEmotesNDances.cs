@@ -101,7 +101,7 @@ public partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
 
                 string emote = command.GetArg(1);
 
-                var emoteObj = GetEmoteBySelector(emote, true);
+                var emoteObj = GetEmoteBySelector(player, emote, true);
 
                 if (emoteObj == null)
                 {
@@ -142,7 +142,7 @@ public partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
 
                 string dance = command.GetArg(1);
 
-                var danceObj = GetEmoteBySelector(dance, false);
+                var danceObj = GetEmoteBySelector(player, dance, false);
 
                 if (danceObj == null)
                 {

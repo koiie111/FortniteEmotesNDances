@@ -13,8 +13,8 @@ This plugin allows players to use Emotes & Dances just like Fortnite.
 ## Commands
 - `css_emotes` - Open emotes menu.
 - `css_dances` - Open dances menu.
-- `css_emotes <number>` - Play an emote by its 1-based position in the emotes list (for example, `bind x "css_emotes 1"`).
-- `css_dances <number>` - Play a dance by its 1-based position in the dances list.
+- `css_emotes <number>` - Play an emote by its 1-based position in the player's available emotes list (for example, `bind x "css_emotes 1"`).
+- `css_dances <number>` - Play a dance by its 1-based position in the player's available dances list.
 - `css_etriggers` - Print all chat triggers for emotes/dances in chat.
 - `css_setemote <name/#userid> emoteName` (`@css/root` required)
 - `css_setdance <name/#userid> danceName` (`@css/root` required)
@@ -30,6 +30,8 @@ This plugin allows players to use Emotes & Dances just like Fortnite.
 ## Purchased access
 
 This fork replaces per-emote CounterStrikeSharp permissions and VIP/group access with database purchases. A player may use an emote or dance only when `fortnite_emotes_access` contains a non-expired row matching the player's SteamID64 and the emote's canonical config `Name` (stored in the `model` column). Admin `setemote` and `setdance` commands intentionally bypass the purchase check.
+
+The `css_emotes` and `css_dances` menus show only entries currently available to that player.
 
 Configure the connection in `configs/plugins/FortniteEmotesNDances/FortniteEmotesNDances.json`:
 

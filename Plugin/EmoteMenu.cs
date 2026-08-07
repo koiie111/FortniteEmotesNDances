@@ -37,9 +37,10 @@ public partial class Plugin
             else if (!isDance && !emote.IsEmote)
                 continue;
 
-            bool hasPerm = HasPurchasedAccess(player, emote);
+            if (!HasPurchasedAccess(player, emote))
+                continue;
 
-            items.Add(new MenuItem(hasPerm ? MenuItemType.Button : MenuItemType.Text, [new MenuValue(Localizer.ForPlayer(player, emote.Name))]));
+            items.Add(new MenuItem(MenuItemType.Button, [new MenuValue(Localizer.ForPlayer(player, emote.Name))]));
             emoteMap[i++] = Localizer.ForPlayer(player, emote.Name);
         }
 
@@ -102,11 +103,12 @@ public partial class Plugin
             else if (!isDance && !emote.IsEmote)
                 continue;
 
-            bool hasPerm = HasPurchasedAccess(player, emote);
+            if (!HasPurchasedAccess(player, emote))
+                continue;
 
             string emoteName = $"{Localizer.ForPlayer(player, $"{emote.Name}")}";
 
-            menu.AddMenuOption(emoteName, OnEmoteSelect, !hasPerm);
+            menu.AddMenuOption(emoteName, OnEmoteSelect);
         }
 
         MenuManager.OpenChatMenu(player, menu);
@@ -143,11 +145,12 @@ public partial class Plugin
             else if (!isDance && !emote.IsEmote)
                 continue;
 
-            bool hasPerm = HasPurchasedAccess(player, emote);
+            if (!HasPurchasedAccess(player, emote))
+                continue;
 
             string emoteName = $"{Localizer.ForPlayer(player, $"{emote.Name}")}";
 
-            menu.AddMenuOption(emoteName, OnEmoteSelect, !hasPerm);
+            menu.AddMenuOption(emoteName, OnEmoteSelect);
         }
 
         MenuManager.OpenCenterHtmlMenu(this, player, menu);
@@ -158,7 +161,7 @@ public partial class Plugin
         return g_EmoteTransMap.ContainsKey(name) ? g_EmoteTransMap[name] : name;
     }
 
-    public Emote? GetEmoteBySelector(string selector, bool emote)
+    public Emote? GetEmoteBySelector(CCSPlayerController player, string selector, bool emote)
     {
         if (int.TryParse(selector, out var number))
         {
@@ -167,6 +170,7 @@ public partial class Plugin
 
             return Config.EmoteDances
                 .Where(item => item.IsEmote == emote)
+                .Where(item => HasPurchasedAccess(player, item))
                 .ElementAtOrDefault(number - 1);
         }
 
