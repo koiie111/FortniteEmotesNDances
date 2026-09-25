@@ -15,8 +15,6 @@ using System.Runtime.InteropServices;
 using FortniteEmotes.API;
 using System.Numerics;
 
-using RayTraceAPI;
-
 namespace FortniteEmotes;
 
 public partial class Plugin
@@ -1029,7 +1027,7 @@ public partial class Plugin
     {
         if (target.IsValidPlayer() && target.PlayerPawn.IsValidPawnAlive() && target.AbsOrigin != null)
         {
-            Vector3 positionBehind = blockcamera && g_RayTraceApi != null ? CalculateSafeCameraPosition(target, 110f, 75f) : CalculatePositionInFront(target, -110f, 75f);
+            Vector3 positionBehind = blockcamera ? CalculateSafeCameraPosition(target, 110f, 75f) : CalculatePositionInFront(target, -110f, 75f);
             Vector3 position = Lerp(GetPosition(cameraProp), positionBehind, blockcamera ? 0.3f : 0.1f);
             cameraProp.Teleport(position, (Vector3)target.PlayerPawn.Value!.V_angle);
         }
@@ -1098,14 +1096,14 @@ public partial class Plugin
 
         Vector3 finalPos = targetCamPos;
 
-        g_RayTraceApi!.TraceEndShape(__eyePos, __camPos, null, GetTraceOptions(), out var result);
+        var result = Trace.TraceEndShape(__eyePos, __camPos, null, GetTraceOptions());
 
-        // Server.PrintToChatAll($"RayTrace: Fraction: {result.Fraction} | DidHit: {result.DidHit}");
+        // Server.PrintToChatAll($"RayTrace: Fraction: {result.Fraction} | DidHit: {result.DidHit()}");
 
-        if (result.DidHit)
+        if (result.DidHit())
         {
             var hitVec = result.EndPos;
-            float distanceToWall = (hitVec - eyePos).Length();
+            float distanceToWall = (hitVec - __eyePos).Length();
             float clampedDistance = Math.Clamp(distanceToWall - 10f, 10f, desiredDistance);
             finalPos = eyePos + backwardDir * clampedDistance;
         }
@@ -1113,20 +1111,19 @@ public partial class Plugin
         return finalPos;
     }
 
-    // Taken from Source2-AntiWallHack by karola3vax
-    private static readonly InteractionLayers OcclusionTraceMask =
-        InteractionLayers.MASK_SHOT_PHYSICS |
-        InteractionLayers.BlockLOS |
-        InteractionLayers.WorldGeometry |
-        InteractionLayers.csgo_opaque;
+    private static readonly Contents OcclusionTraceMask =
+        Contents.PhysicsProp |
+        Contents.BlockLos |
+        Contents.WorldGeometry |
+        Contents.CsgoOpaque;
 
     private static TraceOptions GetTraceOptions()
     {
-        return new TraceOptions(
-            OcclusionTraceMask,
-            0,
-            false
-        );
+        return new TraceOptions
+        {
+            InteractsAs = Contents.Solid,
+            InteractsWith = OcclusionTraceMask,
+        };
     }
 
     public static Vector3 GetPosition(CDynamicProp prop)
@@ -1173,7 +1170,7 @@ public partial class Plugin
         return File.Exists(vdfPath) && File.Exists(binaryPath);
     }
 
-    private readonly string[] _requiredShared = ["FortniteEmotesNDancesAPI", "KitsuneMenu", "RayTraceApi"];
+    private readonly string[] _requiredShared = ["FortniteEmotesNDancesAPI", "KitsuneMenu"];
     private bool AreAllDependaciesInstalled(ref string error)
     {
         string vdfPath = Path.Combine(Server.GameDirectory, "csgo", "addons/metamod", "multiaddonmanager.vdf");
@@ -1182,15 +1179,6 @@ public partial class Plugin
         if (!File.Exists(vdfPath) || !File.Exists(binaryPath))
         {
             error = "MultiAddonManager is not installed.";
-            return false;
-        }
-
-        vdfPath = Path.Combine(Server.GameDirectory, "csgo", "addons/metamod", "RayTrace.vdf");
-        binaryPath = Path.Combine(Server.GameDirectory, "csgo", "addons/RayTrace/bin", RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "win64/RayTrace.dll" : "linuxsteamrt64/RayTrace.so");
-
-        if (!File.Exists(vdfPath) || !File.Exists(binaryPath))
-        {
-            error = "RayTrace-MM is not installed.";
             return false;
         }
 

@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -28,21 +28,19 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="CounterStrikeSharp.API" Version="1.0.366">
+    <PackageReference Include="CounterStrikeSharp.API" Version="1.0.375">
       <PrivateAssets>none</PrivateAssets>
       <ExcludeAssets>runtime</ExcludeAssets>
       <IncludeAssets>compile; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="8.0.0" />
     <PackageReference Include="MySqlConnector" Version="2.3.7" />
 
     <Reference Include="KitsuneMenu">
-      <HintPath>FortniteEmotesNDances/shared/KitsuneMenu/KitsuneMenu.dll</HintPath>
+      <HintPath>../lib/KitsuneMenu.dll</HintPath>
     </Reference>
     <ProjectReference Include="..\API\FortniteEmotesNDancesAPI.csproj">
       <Private>false</Private>
     </ProjectReference>
-    <ProjectReference Include="..\RayTraceApi\RayTraceApi.csproj" />
     <None Update="lang\**\*.*" CopyToOutputDirectory="PreserveNewest" />
     <None Update="FortniteEmotesCatalog.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

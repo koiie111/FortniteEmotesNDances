@@ -1,8 +1,8 @@
 {
 	"CBaseEntity_CollisionRulesChanged": {
 		"offsets": {
-			"windows": 186,
-			"linux": 185
+			"windows": 188,
+			"linux": 187
 		}
 	}
 }

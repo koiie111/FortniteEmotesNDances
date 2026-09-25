@@ -44,8 +44,6 @@ public partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
 
     public FakeConVar<bool> EmotesEnable = new("css_fortnite_emotes_enable", "ConVar to toggle emotes and dances", true);
 
-    private static CRayTrace? g_RayTraceApi;
-
     public void OnConfigParsed(PluginConfig config)
     {
         if (config.Version < Config.Version)
@@ -326,7 +324,6 @@ public partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
         RegisterListener<Listeners.OnMapStart>(OnMapStart);
         RegisterListener<Listeners.OnTick>(OnTick);
         RegisterListener<Listeners.OnServerPrecacheResources>(OnServerPrecacheResources);
-        RegisterListener<Listeners.OnMetamodAllPluginsLoaded>(OnMetamodAllPluginsLoaded);
 
         Transmit_OnLoad();
 
@@ -349,7 +346,6 @@ public partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
         if (hotReload)
         {
             OnMapStart(Server.MapName);
-            OnMetamodAllPluginsLoaded();
         }
     }
 
@@ -366,7 +362,6 @@ public partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
         RemoveListener<Listeners.OnMapStart>(OnMapStart);
         RemoveListener<Listeners.OnTick>(OnTick);
         RemoveListener<Listeners.OnServerPrecacheResources>(OnServerPrecacheResources);
-        RemoveListener<Listeners.OnMetamodAllPluginsLoaded>(OnMetamodAllPluginsLoaded);
 
         // RemoveCommandListener("say", OnSay, HookMode.Pre);
         // RemoveCommandListener("say_team", OnSay, HookMode.Pre);
@@ -375,17 +370,6 @@ public partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
 
         if (Config.StopDamageWhenInEmote)
             RemoveListener<Listeners.OnEntityTakeDamagePre>(OnTakeDamage);
-    }
-
-    private void OnMetamodAllPluginsLoaded()
-    {
-        if (!RayTraceBridge.Initialize())
-        {
-            Logger.LogError("RayTrace initialization failed. Is RayTrace-MM module loaded?");
-            g_RayTraceApi = null;
-            return;
-        }
-        g_RayTraceApi = new CRayTrace();
     }
 
     private HookResult OnTakeDamage(CBaseEntity victim, CTakeDamageInfo damageinfo)

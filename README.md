@@ -23,7 +23,6 @@ This plugin allows players to use Emotes & Dances just like Fortnite.
 - [Metamod](https://www.metamodsource.net/downloads.php?branch=dev)
 - [CounterStrikeSharp v361+](https://github.com/roflmuffin/CounterStrikeSharp/releases/latest)
 - [MultiAddonManager](https://github.com/Source2ZE/MultiAddonManager/releases/latest)
-- [Ray-Trace](https://github.com/FUNPLAY-pro-CS2/Ray-Trace/releases/latest) (`RayTraceImpl` plugin not needed)
 - [CSSharpPatcher](https://github.com/samyycX/CSSharpPatcher) (optional but recommended to fix volume)
 - MySQL/MariaDB with the `fortnite_emotes_access` table from the accompanying website migration
 
