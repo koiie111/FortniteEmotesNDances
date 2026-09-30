@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using CounterStrikeSharp.API;
@@ -6,56 +7,82 @@ namespace FortniteEmotes;
 
 public partial class Plugin
 {
-    private readonly Dictionary<string, DateTime> _missingModels = new();
-    private readonly HashSet<string> _availableModels = new();
+    private sealed record ModelStatus(bool Available, DateTime CheckedAt);
+
+    private readonly ConcurrentDictionary<string, ModelStatus> _modelStatus = new();
+    private readonly ConcurrentDictionary<string, byte> _modelChecksRunning = new();
     private static readonly TimeSpan MissingModelRecheck = TimeSpan.FromSeconds(30);
 
     /// <summary>
-    /// Checks that a model's compiled resource exists on disk (loose addon file or inside a mounted VPK)
-    /// before spawning a prop with it. Setting a missing model on a prop stalls the server and gets
-    /// the player kicked with NETWORK_DISCONNECT_OVERFLOW. Fails open when nothing could be inspected.
+    /// Reports whether a model's compiled resource exists on disk (loose addon file or inside a mounted VPK).
+    /// Setting a missing model on a prop stalls the server and gets the player kicked with
+    /// NETWORK_DISCONNECT_OVERFLOW. The disk is never read on the game thread: the result comes from a cache
+    /// filled by <see cref="StartModelCheck"/>, and an unknown model fails open while its check runs in the background.
     /// </summary>
     private bool IsModelAvailable(string model)
     {
         if (!Config.EmoteModelCheck || string.IsNullOrWhiteSpace(model))
             return true;
 
-        if (_availableModels.Contains(model))
-            return true;
-
-        if (_missingModels.TryGetValue(model, out var checkedAt) && DateTime.UtcNow - checkedAt < MissingModelRecheck)
-            return false;
-
-        bool inspected = false;
-        bool found;
-        try
+        if (_modelStatus.TryGetValue(model, out var status))
         {
-            found = FindModel(model + "_c", ref inspected);
-        }
-        catch (Exception ex)
-        {
-            Logger.LogWarning("Model availability check failed for {Model}: {Message}", model, ex.Message);
-            return true;
+            if (!status.Available && DateTime.UtcNow - status.CheckedAt >= MissingModelRecheck)
+                CheckModelInBackground(model);
+
+            return status.Available;
         }
 
-        if (found || !inspected)
-        {
-            _missingModels.Remove(model);
-            _availableModels.Add(model);
-            return true;
-        }
-
-        if (!_missingModels.ContainsKey(model))
-            Logger.LogError("Emote model '{Model}' was not found in any mounted addon. Make sure the addon containing it is listed in mm_extra_addons (MultiAddonManager) and is published with this file. Emotes using it are disabled.", model);
-
-        _missingModels[model] = DateTime.UtcNow;
-        return false;
+        CheckModelInBackground(model);
+        return true;
     }
 
-    private static bool FindModel(string compiledPath, ref bool inspected)
+    /// <summary>Warms the model cache for every configured emote model without blocking the game thread.</summary>
+    private void StartModelCheck()
     {
+        if (!Config.EmoteModelCheck)
+            return;
+
+        foreach (var model in Config.EmoteDances.Select(e => e.Model).Where(m => !string.IsNullOrWhiteSpace(m)).Distinct())
+            CheckModelInBackground(model);
+    }
+
+    private void CheckModelInBackground(string model)
+    {
+        if (!_modelChecksRunning.TryAdd(model, 0))
+            return;
+
         string gameDir = Server.GameDirectory;
 
+        Task.Run(() =>
+        {
+            try
+            {
+                bool inspected = false;
+                bool found = FindModel(gameDir, model + "_c", ref inspected);
+
+                // Nothing could be inspected: fail open rather than block emotes on a broken check.
+                bool available = found || !inspected;
+
+                bool wasMissing = _modelStatus.TryGetValue(model, out var previous) && !previous.Available;
+                _modelStatus[model] = new ModelStatus(available, DateTime.UtcNow);
+
+                if (!available && !wasMissing)
+                    Logger.LogError("Emote model '{Model}' was not found in any mounted addon. Make sure the addon containing it is listed in mm_extra_addons (MultiAddonManager) and is published with this file. Emotes using it are disabled.", model);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning("Model availability check failed for {Model}: {Message}", model, ex.Message);
+                _modelStatus[model] = new ModelStatus(true, DateTime.UtcNow);
+            }
+            finally
+            {
+                _modelChecksRunning.TryRemove(model, out _);
+            }
+        });
+    }
+
+    private static bool FindModel(string gameDir, string compiledPath, ref bool inspected)
+    {
         var looseRoots = new List<string> { Path.Combine(gameDir, "csgo") };
         string addonsDir = Path.Combine(gameDir, "csgo_addons");
         if (Directory.Exists(addonsDir))

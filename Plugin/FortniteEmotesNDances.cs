@@ -466,6 +466,8 @@ public partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
 
         EmitSoundExtension.ClearSounds();
 
+        StartModelCheck();
+
         playerWeapons.Clear();
 
         playerItems.Clear();
