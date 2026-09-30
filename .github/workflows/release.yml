@@ -2,42 +2,60 @@ name: Release
 
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
   contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine version
+        run: |
+          # Reuse the tag if this commit is already released, otherwise bump the patch of the latest vX.Y.Z tag
+          TAG="$(git tag --points-at HEAD --list 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)"
+          if [ -z "${TAG}" ]; then
+            LATEST="$(git tag --list 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)"
+            LATEST="${LATEST:-v0.0.0}"
+            IFS=. read -r MAJOR MINOR PATCH <<< "${LATEST#v}"
+            TAG="v${MAJOR}.${MINOR}.$((PATCH + 1))"
+          fi
+          echo "TAG=${TAG}" >> "$GITHUB_ENV"
+          echo "VERSION=${TAG#v}" >> "$GITHUB_ENV"
+          echo "Releasing ${TAG}"
 
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
 
       - name: Publish plugin
-        run: dotnet publish Plugin/FortniteEmotesNDances.csproj -c Release
+        run: dotnet publish Plugin/FortniteEmotesNDances.csproj -c Release -p:Version=${VERSION}
 
       - name: Package
         run: |
-          VERSION="${GITHUB_REF_NAME}"
-          [ "${GITHUB_REF_TYPE}" = "tag" ] || VERSION="dev-${GITHUB_SHA::7}"
-          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
           cd Plugin
-          zip -r "../FortniteEmotesNDances_${VERSION}.zip" FortniteEmotesNDances
+          zip -r "../FortniteEmotesNDances_${TAG}.zip" FortniteEmotesNDances
 
       - uses: actions/upload-artifact@v4
         with:
-          name: FortniteEmotesNDances_${{ env.VERSION }}
-          path: FortniteEmotesNDances_${{ env.VERSION }}.zip
+          name: FortniteEmotesNDances_${{ env.TAG }}
+          path: FortniteEmotesNDances_${{ env.TAG }}.zip
 
       - name: Create GitHub release
-        if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
         with:
-          files: FortniteEmotesNDances_${{ env.VERSION }}.zip
+          tag_name: ${{ env.TAG }}
+          target_commitish: ${{ github.sha }}
+          files: FortniteEmotesNDances_${{ env.TAG }}.zip
           generate_release_notes: true

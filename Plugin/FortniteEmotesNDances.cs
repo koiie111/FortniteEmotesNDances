@@ -20,7 +20,8 @@ public partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
     public override string ModuleName => "Fortnite Emotes & Dances";
     public override string ModuleDescription => "CS2 Port of Fortnite Emotes & Dances";
     public override string ModuleAuthor => "Cruze; database access fork by koiie111";
-    public override string ModuleVersion => "1.1.10-db-access";
+    // Version is set at build time (-p:Version=...) by the release workflow
+    public override string ModuleVersion => $"{typeof(Plugin).Assembly.GetName().Version?.ToString(3)}-db-access";
 
     public required PluginConfig Config { get; set; } = new();
 
