@@ -14,11 +14,21 @@ public partial class Plugin
         playerWeapons.Clear();
         playerItems.Clear();
         g_bRoundEnd = false;
-        foreach (var player in g_PlayerSettings)
+        foreach (var settings in g_PlayerSettings.ToList())
         {
-            if (player.Value.IsDancing)
+            if (!settings.Value.IsDancing)
+                continue;
+
+            // Stop properly so emote props are removed instead of being left behind dancing
+            var player = Utilities.GetPlayerFromSteamId(settings.Key);
+            if (player != null && player.IsValidPlayer())
             {
-                player.Value.Reset();
+                StopEmote(player, true);
+            }
+            else
+            {
+                RemoveEmoteEntities(settings.Value);
+                settings.Value.Reset();
             }
         }
         return HookResult.Continue;

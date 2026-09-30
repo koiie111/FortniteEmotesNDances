@@ -592,6 +592,19 @@ public partial class Plugin
         g_PlayerSettings[steamID].CameraPropIndex = 0;
     }
 
+    private static void RemoveEmoteEntities(PlayerSettings settings)
+    {
+        foreach (var index in new[] { settings.EmoteModelIndex, settings.CloneModelIndex, settings.CameraPropIndex })
+        {
+            if (index == 0)
+                continue;
+
+            var entity = Utilities.GetEntityFromIndex<CDynamicProp>((int)index);
+            if (entity != null && entity.IsValid && entity.DesignerName == "prop_dynamic")
+                entity.Remove();
+        }
+    }
+
     private int GetPlayerSpeed(CCSPlayerController player)
     {
         return (int)Math.Round(player.PlayerPawn.Value!.AbsVelocity.Length2D());
@@ -1045,11 +1058,25 @@ public partial class Plugin
         return null;
     }
 
-    private static List<(ushort Index, float Value)> ReadAttributes(CAttributeList list)
+    // NetworkedVector<T> only enumerates CHandle<T>, so read the CUtlVector<CEconItemAttribute> manually
+    private static unsafe List<(ushort Index, float Value)>? ReadAttributes(CAttributeList list)
     {
-        var result = new List<(ushort, float)>();
-        foreach (var attribute in list.Attributes)
+        var vector = list.Attributes;
+        int count = vector.Count;
+        if (count == 0)
+            return new();
+        if (count < 0 || count > 64)
+            return null;
+
+        int elementSize = Schema.GetClassSize("CEconItemAttribute");
+        nint memory = *(nint*)(vector.Handle + 8);
+        if (elementSize <= 0 || memory == IntPtr.Zero)
+            return null;
+
+        var result = new List<(ushort, float)>(count);
+        for (int i = 0; i < count; i++)
         {
+            var attribute = new CEconItemAttribute(memory + i * elementSize);
             result.Add((attribute.AttributeDefinitionIndex, attribute.Value));
         }
         return result;
@@ -1060,37 +1087,56 @@ public partial class Plugin
         if (!Config.EmoteGlovesFix)
             return;
 
-        if (!player.IsValidPlayer() || !player.PlayerPawn.IsValidPawnAlive())
-            return;
-
-        var pawn = player.PlayerPawn.Value;
-        if (pawn == null)
-            return;
-
-        CEconItemView item = pawn.EconGloves;
-
-        var snapshot = new GloveSnapshot
+        try
         {
-            PawnIndex = pawn.Index,
-            ItemDefinitionIndex = item.ItemDefinitionIndex,
-            DynamicAttributes = ReadAttributes(item.NetworkedDynamicAttributes),
-            StaticAttributes = ReadAttributes(item.AttributeList),
-        };
+            if (!player.IsValidPlayer() || !player.PlayerPawn.IsValidPawnAlive())
+                return;
 
-        // Keep an older snapshot if gloves are still cleared by us on the same pawn
-        if (!snapshot.HasAttributes && g_GloveSnapshots.TryGetValue(player.SteamID, out var existing) && existing.PawnIndex == pawn.Index)
-            snapshot = existing;
+            var pawn = player.PlayerPawn.Value;
+            if (pawn == null)
+                return;
 
-        // Clearing custom gloves is only safe when we are able to give them back
-        if (snapshot.HasAttributes && GetSetOrAddAttributeValueByName() == null)
-            return;
+            CEconItemView item = pawn.EconGloves;
 
-        g_GloveSnapshots[player.SteamID] = snapshot;
+            var dynamicAttributes = ReadAttributes(item.NetworkedDynamicAttributes);
+            var staticAttributes = ReadAttributes(item.AttributeList);
 
-        item.NetworkedDynamicAttributes.Attributes.RemoveAll();
-        item.AttributeList.Attributes.RemoveAll();
+            // Unable to remember the gloves, so leave them untouched
+            if (dynamicAttributes == null || staticAttributes == null)
+                return;
 
-        RefreshGlovesModel(pawn);
+            // Only known glove attributes can be given back
+            if (dynamicAttributes.Concat(staticAttributes).Any(a => !GloveAttributeNames.ContainsKey(a.Index)))
+                return;
+
+            var snapshot = new GloveSnapshot
+            {
+                PawnIndex = pawn.Index,
+                ItemDefinitionIndex = item.ItemDefinitionIndex,
+                DynamicAttributes = dynamicAttributes,
+                StaticAttributes = staticAttributes,
+            };
+
+            // Keep an older snapshot if gloves are still cleared by us on the same pawn
+            if (!snapshot.HasAttributes && g_GloveSnapshots.TryGetValue(player.SteamID, out var existing) && existing.PawnIndex == pawn.Index)
+                snapshot = existing;
+
+            // Clearing custom gloves is only safe when we are able to give them back
+            if (snapshot.HasAttributes && GetSetOrAddAttributeValueByName() == null)
+                return;
+
+            g_GloveSnapshots[player.SteamID] = snapshot;
+
+            item.NetworkedDynamicAttributes.Attributes.RemoveAll();
+            item.AttributeList.Attributes.RemoveAll();
+
+            RefreshGlovesModel(pawn);
+        }
+        catch (Exception ex)
+        {
+            g_GloveSnapshots.Remove(player.SteamID);
+            Logger.LogWarning("Failed to hide gloves for emote: {0}", ex.Message);
+        }
     }
 
     private void RestorePlayerGloves(CCSPlayerController player)
@@ -1098,43 +1144,44 @@ public partial class Plugin
         if (!g_GloveSnapshots.Remove(player.SteamID, out var snapshot))
             return;
 
-        if (!player.IsValidPlayer() || !player.PlayerPawn.IsValidPawnAlive())
-            return;
-
-        var pawn = player.PlayerPawn.Value;
-        if (pawn == null || pawn.Index != snapshot.PawnIndex)
-            return;
-
-        CEconItemView item = pawn.EconGloves;
-
-        // Gloves were changed meanwhile (e.g. re-given by WeaponPaints), leave them as is
-        if (item.ItemDefinitionIndex != snapshot.ItemDefinitionIndex
-            || item.NetworkedDynamicAttributes.Attributes.Count() > 0
-            || item.AttributeList.Attributes.Count() > 0)
-            return;
-
-        if (snapshot.HasAttributes)
+        try
         {
-            var setAttribute = GetSetOrAddAttributeValueByName();
-            if (setAttribute == null)
+            if (!player.IsValidPlayer() || !player.PlayerPawn.IsValidPawnAlive())
                 return;
 
-            foreach (var (index, value) in snapshot.DynamicAttributes)
+            var pawn = player.PlayerPawn.Value;
+            if (pawn == null || pawn.Index != snapshot.PawnIndex)
+                return;
+
+            CEconItemView item = pawn.EconGloves;
+
+            // Gloves were changed meanwhile (e.g. re-given by WeaponPaints), leave them as is
+            if (item.ItemDefinitionIndex != snapshot.ItemDefinitionIndex
+                || item.NetworkedDynamicAttributes.Attributes.Count > 0
+                || item.AttributeList.Attributes.Count > 0)
+                return;
+
+            if (snapshot.HasAttributes)
             {
-                if (GloveAttributeNames.TryGetValue(index, out var name))
-                    setAttribute.Invoke(item.NetworkedDynamicAttributes.Handle, name, value);
+                var setAttribute = GetSetOrAddAttributeValueByName();
+                if (setAttribute == null)
+                    return;
+
+                foreach (var (index, value) in snapshot.DynamicAttributes)
+                    setAttribute.Invoke(item.NetworkedDynamicAttributes.Handle, GloveAttributeNames[index], value);
+
+                foreach (var (index, value) in snapshot.StaticAttributes)
+                    setAttribute.Invoke(item.AttributeList.Handle, GloveAttributeNames[index], value);
+
+                item.Initialized = true;
             }
 
-            foreach (var (index, value) in snapshot.StaticAttributes)
-            {
-                if (GloveAttributeNames.TryGetValue(index, out var name))
-                    setAttribute.Invoke(item.AttributeList.Handle, name, value);
-            }
-
-            item.Initialized = true;
+            RefreshGlovesModel(pawn);
         }
-
-        RefreshGlovesModel(pawn);
+        catch (Exception ex)
+        {
+            Logger.LogWarning("Failed to restore gloves after emote: {0}", ex.Message);
+        }
     }
 
     private void RefreshGlovesModel(CCSPlayerPawn pawn)
