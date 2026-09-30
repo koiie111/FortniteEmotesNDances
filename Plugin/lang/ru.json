@@ -25,6 +25,7 @@
     "emote.player.duckcheck": "{lightred}Цель должна стоять для использования этой эмоции.",
     "emote.player.disabledbyadmin": "{lightred}Администратор отключил эмоции/танцы.",
     "emote.unknownerror": "{lightred}Произошла неизвестная ошибка. Попробуйте позже.",
+    "emote.modelmissing": "{lightred}Модель эмоций не загружена на сервере. Сообщите администратору.",
     "emote.no-access": "{lightred}У вас нет доступа к этой эмоции.",
     "emote.not-found": "{lightred}Не удалось найти эмоцию с таким названием.",
     "emote.playing": "Проигрывается {lime}{0}{default}.",

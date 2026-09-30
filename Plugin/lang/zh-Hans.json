@@ -25,6 +25,7 @@
     "emote.player.duckcheck": "{lightred}目标需要站立才能使用这个表情。",
     "emote.player.disabledbyadmin": "{lightred}管理员已禁用表情/舞蹈。",
     "emote.unknownerror": "{lightred}发生未知错误。请稍后再试。",
+    "emote.modelmissing": "{lightred}此服务器未加载表情模型，请联系管理员。",
     "emote.no-access": "{lightred}你无权访问这个表情。",
     "emote.not-found": "{lightred}无法找到该名称的表情。",
     "emote.playing": "正在播放 {lime}{0}{default}。",

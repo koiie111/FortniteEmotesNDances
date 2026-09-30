@@ -25,6 +25,7 @@
     "emote.player.duckcheck": "{lightred}Target needs to be standing to use this emote.",
     "emote.player.disabledbyadmin": "{lightred}Admin has disabled emotes/dances.",
     "emote.unknownerror": "{lightred}An unknown error occurred. Please try again later.",
+    "emote.modelmissing": "{lightred}Emote model is not loaded on this server. Please contact an administrator.",
     "emote.no-access": "{lightred}You do not have access to this emote.",
     "emote.not-found": "{lightred}Unable to find emote with that name.",
     "emote.playing": "Playing {lime}{0}{default}.",

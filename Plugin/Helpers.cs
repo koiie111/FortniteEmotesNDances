@@ -171,6 +171,12 @@ public partial class Plugin
             StopEmote(target);
         }
 
+        if (!IsModelAvailable(emote.Model))
+        {
+            error = $" {Localizer.ForPlayer(player, "emote.prefix")} {Localizer.ForPlayer(player, "emote.modelmissing")}";
+            return false;
+        }
+
         var prop = Utilities.CreateEntityByName<CDynamicProp>("prop_dynamic");
 
         if (prop == null || prop.Entity == null || prop.Entity.Handle == IntPtr.Zero || !prop.IsValid)
