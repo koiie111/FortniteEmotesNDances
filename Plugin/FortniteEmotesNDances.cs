@@ -82,37 +82,10 @@ public partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
                 if (player == null)
                     return;
 
-                if (command.ArgCount == 1)
-                {
-                    switch (Config.EmoteMenuType)
-                    {
-                        case 0:
-                            ShowChatMenu(player, false);
-                            break;
-                        case 1:
-                            ShowCenterMenu(player, false);
-                            break;
-                        default:
-                            ShowKitsuneMenu(player, false);
-                            break;
-                    }
-                    return;
-                }
+                // CommandInfo is only valid during this call; read args before the access list may load asynchronously.
+                string? selector = command.ArgCount > 1 ? command.GetArg(1) : null;
 
-                string emote = command.GetArg(1);
-
-                var emoteObj = GetEmoteBySelector(player, emote, true);
-
-                if (emoteObj == null)
-                {
-                    player.PrintToChat($" {Localizer.ForPlayer(player, "emote.prefix")} {Localizer.ForPlayer(player, "emote.not-found")}");
-                    return;
-                }
-                string error = "";
-                if (!PlayEmote(player, emoteObj, ref error))
-                {
-                    player.PrintToChat(error);
-                }
+                WithPlayerAccess(player, () => OnEmoteOrDanceCommand(player, selector, false));
             }, CommandUsage.CLIENT_ONLY);
         }
 
@@ -123,39 +96,10 @@ public partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
                 if (player == null)
                     return;
 
-                if (command.ArgCount == 1)
-                {
-                    switch (Config.EmoteMenuType)
-                    {
-                        case 0:
-                            ShowChatMenu(player, true);
-                            break;
-                        case 1:
-                            ShowCenterMenu(player, true);
-                            break;
-                        default:
-                            ShowKitsuneMenu(player, true);
-                            break;
-                    }
-                    return;
-                }
+                // CommandInfo is only valid during this call; read args before the access list may load asynchronously.
+                string? selector = command.ArgCount > 1 ? command.GetArg(1) : null;
 
-                string dance = command.GetArg(1);
-
-                var danceObj = GetEmoteBySelector(player, dance, false);
-
-                if (danceObj == null)
-                {
-                    player.PrintToChat($" {Localizer.ForPlayer(player, "emote.prefix")} {Localizer.ForPlayer(player, "emote.not-found")}");
-                    return;
-                }
-
-                string error = "";
-                if (!PlayEmote(player, danceObj, ref error))
-                {
-                    if (!string.IsNullOrEmpty(error))
-                        player.PrintToChat(error);
-                }
+                WithPlayerAccess(player, () => OnEmoteOrDanceCommand(player, selector, true));
             }, CommandUsage.CLIENT_ONLY);
         }
 
@@ -399,6 +343,44 @@ public partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
         return HookResult.Continue;
     }
 
+    private void OnEmoteOrDanceCommand(CCSPlayerController player, string? selector, bool isDance)
+    {
+        if (!player.IsValid)
+            return;
+
+        if (selector == null)
+        {
+            switch (Config.EmoteMenuType)
+            {
+                case 0:
+                    ShowChatMenu(player, isDance);
+                    break;
+                case 1:
+                    ShowCenterMenu(player, isDance);
+                    break;
+                default:
+                    ShowKitsuneMenu(player, isDance);
+                    break;
+            }
+            return;
+        }
+
+        var emoteObj = GetEmoteBySelector(player, selector, !isDance);
+
+        if (emoteObj == null)
+        {
+            player.PrintToChat($" {Localizer.ForPlayer(player, "emote.prefix")} {Localizer.ForPlayer(player, "emote.not-found")}");
+            return;
+        }
+
+        string error = "";
+        if (!PlayEmote(player, emoteObj, ref error))
+        {
+            if (!string.IsNullOrEmpty(error))
+                player.PrintToChat(error);
+        }
+    }
+
     public HookResult OnMessage(UserMessage um)
     {
         if (Utilities.GetPlayerFromIndex(um.ReadInt("entityindex")) is not CCSPlayerController player || player.IsBot)
@@ -441,18 +423,22 @@ public partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
         {
             if (trigger.Value.Any(message.Equals))
             {
-                if (!HasPurchasedAccess(player, trigger.Key))
+                var emote = trigger.Key;
+                WithPlayerAccess(player, () =>
                 {
-                    player.PrintToChat($" {Localizer.ForPlayer(player, "emote.prefix")} {Localizer.ForPlayer(player, "emote.no-access")}");
-                    return HookResult.Stop;
-                }
+                    if (!HasPurchasedAccess(player, emote))
+                    {
+                        player.PrintToChat($" {Localizer.ForPlayer(player, "emote.prefix")} {Localizer.ForPlayer(player, "emote.no-access")}");
+                        return;
+                    }
 
-                string error = "";
-                if (!PlayEmote(player, trigger.Key, ref error))
-                {
-                    if (!string.IsNullOrEmpty(error))
-                        player.PrintToChat(error);
-                }
+                    string error = "";
+                    if (!PlayEmote(player, emote, ref error))
+                    {
+                        if (!string.IsNullOrEmpty(error))
+                            player.PrintToChat(error);
+                    }
+                });
                 return HookResult.Stop;
             }
         }
