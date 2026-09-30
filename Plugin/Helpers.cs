@@ -3,6 +3,7 @@ using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Entities.Constants;
 using CounterStrikeSharp.API.Modules.Memory;
+using CounterStrikeSharp.API.Modules.Memory.DynamicFunctions;
 using CounterStrikeSharp.API.Modules.Timers;
 using CounterStrikeSharp.API.Modules.Utils;
 using CSSTimer = CounterStrikeSharp.API.Modules.Timers.Timer;
@@ -192,7 +193,7 @@ public partial class Plugin
 
         SetCollision(prop, CollisionGroup.COLLISION_GROUP_NEVER, SolidType_t.SOLID_NONE, 12);
 
-        RefreshPlayerGloves(target);
+        HidePlayerGloves(target);
 
         SetPropInvisible(prop);
 
@@ -560,7 +561,7 @@ public partial class Plugin
             && g_PlayerSettings[steamID].PlayerMoveType != player.PlayerPawn.Value!.ActualMoveType)
             SetPlayerMoveType(player, g_PlayerSettings[steamID].PlayerMoveType);
 
-        RefreshPlayerGloves(player, true);
+        RestorePlayerGloves(player);
 
         var activeWeapon = player.PlayerPawn.Value!.WeaponServices!.ActiveWeapon.Value;
 
@@ -996,7 +997,68 @@ public partial class Plugin
         }
     }
 
-    private void RefreshPlayerGloves(CCSPlayerController player, bool update = false)
+    private class GloveSnapshot
+    {
+        public uint PawnIndex { get; init; }
+        public ushort ItemDefinitionIndex { get; init; }
+        public List<(ushort Index, float Value)> DynamicAttributes { get; init; } = new();
+        public List<(ushort Index, float Value)> StaticAttributes { get; init; } = new();
+        public bool HasAttributes => DynamicAttributes.Count > 0 || StaticAttributes.Count > 0;
+    }
+
+    private readonly Dictionary<ulong, GloveSnapshot> g_GloveSnapshots = new();
+
+    // Glove skins (e.g. from WeaponPaints) only use these attributes
+    private static readonly Dictionary<ushort, string> GloveAttributeNames = new()
+    {
+        { 6, "set item texture prefab" },
+        { 7, "set item texture seed" },
+        { 8, "set item texture wear" },
+    };
+
+    private static MemoryFunctionVoid<nint, string, float>? _setOrAddAttributeValueByName;
+    private static bool _setOrAddAttributeValueByNameLoaded = false;
+
+    private MemoryFunctionVoid<nint, string, float>? GetSetOrAddAttributeValueByName()
+    {
+        if (_setOrAddAttributeValueByNameLoaded)
+            return _setOrAddAttributeValueByName;
+
+        _setOrAddAttributeValueByNameLoaded = true;
+
+        // Own key first, then the one shipped by WeaponPaints in case ours is outdated
+        foreach (var key in new[] { "FortniteEmotes_CAttributeList_SetOrAddAttributeValueByName", "CAttributeList_SetOrAddAttributeValueByName" })
+        {
+            try
+            {
+                var signature = GameData.GetSignature(key);
+                if (string.IsNullOrEmpty(signature))
+                    continue;
+
+                _setOrAddAttributeValueByName = new MemoryFunctionVoid<nint, string, float>(signature);
+                return _setOrAddAttributeValueByName;
+            }
+            catch (Exception ex)
+            {
+                DebugLogs($"Failed to load signature {key}: {ex.Message}");
+            }
+        }
+
+        Logger.LogWarning("CAttributeList_SetOrAddAttributeValueByName signature not found, custom gloves will not be touched during emotes.");
+        return null;
+    }
+
+    private static List<(ushort Index, float Value)> ReadAttributes(CAttributeList list)
+    {
+        var result = new List<(ushort, float)>();
+        foreach (var attribute in list.Attributes)
+        {
+            result.Add((attribute.AttributeDefinitionIndex, attribute.Value));
+        }
+        return result;
+    }
+
+    private void HidePlayerGloves(CCSPlayerController player)
     {
         if (!Config.EmoteGlovesFix)
             return;
@@ -1004,24 +1066,91 @@ public partial class Plugin
         if (!player.IsValidPlayer() || !player.PlayerPawn.IsValidPawnAlive())
             return;
 
-        var playerPawnValue = player.PlayerPawn.Value;
-        if (playerPawnValue == null)
+        var pawn = player.PlayerPawn.Value;
+        if (pawn == null)
             return;
 
-        CEconItemView item = playerPawnValue.EconGloves;
+        CEconItemView item = pawn.EconGloves;
+
+        var snapshot = new GloveSnapshot
+        {
+            PawnIndex = pawn.Index,
+            ItemDefinitionIndex = item.ItemDefinitionIndex,
+            DynamicAttributes = ReadAttributes(item.NetworkedDynamicAttributes),
+            StaticAttributes = ReadAttributes(item.AttributeList),
+        };
+
+        // Keep an older snapshot if gloves are still cleared by us on the same pawn
+        if (!snapshot.HasAttributes && g_GloveSnapshots.TryGetValue(player.SteamID, out var existing) && existing.PawnIndex == pawn.Index)
+            snapshot = existing;
+
+        // Clearing custom gloves is only safe when we are able to give them back
+        if (snapshot.HasAttributes && GetSetOrAddAttributeValueByName() == null)
+            return;
+
+        g_GloveSnapshots[player.SteamID] = snapshot;
+
         item.NetworkedDynamicAttributes.Attributes.RemoveAll();
         item.AttributeList.Attributes.RemoveAll();
 
-        SetBodygroup(playerPawnValue, "first_or_third_person", 0);
+        RefreshGlovesModel(pawn);
+    }
 
-        if (update) return;
+    private void RestorePlayerGloves(CCSPlayerController player)
+    {
+        if (!g_GloveSnapshots.Remove(player.SteamID, out var snapshot))
+            return;
+
+        if (!player.IsValidPlayer() || !player.PlayerPawn.IsValidPawnAlive())
+            return;
+
+        var pawn = player.PlayerPawn.Value;
+        if (pawn == null || pawn.Index != snapshot.PawnIndex)
+            return;
+
+        CEconItemView item = pawn.EconGloves;
+
+        // Gloves were changed meanwhile (e.g. re-given by WeaponPaints), leave them as is
+        if (item.ItemDefinitionIndex != snapshot.ItemDefinitionIndex
+            || item.NetworkedDynamicAttributes.Attributes.Count() > 0
+            || item.AttributeList.Attributes.Count() > 0)
+            return;
+
+        if (snapshot.HasAttributes)
+        {
+            var setAttribute = GetSetOrAddAttributeValueByName();
+            if (setAttribute == null)
+                return;
+
+            foreach (var (index, value) in snapshot.DynamicAttributes)
+            {
+                if (GloveAttributeNames.TryGetValue(index, out var name))
+                    setAttribute.Invoke(item.NetworkedDynamicAttributes.Handle, name, value);
+            }
+
+            foreach (var (index, value) in snapshot.StaticAttributes)
+            {
+                if (GloveAttributeNames.TryGetValue(index, out var name))
+                    setAttribute.Invoke(item.AttributeList.Handle, name, value);
+            }
+
+            item.Initialized = true;
+        }
+
+        RefreshGlovesModel(pawn);
+    }
+
+    private void RefreshGlovesModel(CCSPlayerPawn pawn)
+    {
+        SetBodygroup(pawn, "first_or_third_person", 0);
 
         AddTimer(0.2f, () =>
         {
-            // TODO: Re-give gloves
+            if (pawn == null || !pawn.IsValid)
+                return;
 
-            SetBodygroup(playerPawnValue, "first_or_third_person", 1);
-        });
+            SetBodygroup(pawn, "first_or_third_person", 1);
+        }, TimerFlags.STOP_ON_MAPCHANGE);
     }
 
     private void SetBodygroup(CCSPlayerPawn pawn, string group, int value)

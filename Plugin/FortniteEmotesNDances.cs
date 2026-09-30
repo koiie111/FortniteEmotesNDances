@@ -472,6 +472,8 @@ public partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
 
         playerItems.Clear();
 
+        g_GloveSnapshots.Clear();
+
         AddTimer(1.0f, () =>
         {
             g_GameRules = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").First().GameRules!;
