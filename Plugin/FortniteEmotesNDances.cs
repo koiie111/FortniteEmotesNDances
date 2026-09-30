@@ -20,7 +20,7 @@ public partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
     public override string ModuleName => "Fortnite Emotes & Dances";
     public override string ModuleDescription => "CS2 Port of Fortnite Emotes & Dances";
     public override string ModuleAuthor => "Cruze; database access fork by koiie111";
-    public override string ModuleVersion => "1.1.7-db-access";
+    public override string ModuleVersion => "1.1.8-db-access";
 
     public required PluginConfig Config { get; set; } = new();
 

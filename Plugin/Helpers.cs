@@ -1026,22 +1026,19 @@ public partial class Plugin
 
         _setOrAddAttributeValueByNameLoaded = true;
 
-        // Own key first, then the one shipped by WeaponPaints in case ours is outdated
-        foreach (var key in new[] { "FortniteEmotes_CAttributeList_SetOrAddAttributeValueByName", "CAttributeList_SetOrAddAttributeValueByName" })
+        // Signature is shipped by WeaponPaints in its gamedata
+        try
         {
-            try
+            var signature = GameData.GetSignature("CAttributeList_SetOrAddAttributeValueByName");
+            if (!string.IsNullOrEmpty(signature))
             {
-                var signature = GameData.GetSignature(key);
-                if (string.IsNullOrEmpty(signature))
-                    continue;
-
                 _setOrAddAttributeValueByName = new MemoryFunctionVoid<nint, string, float>(signature);
                 return _setOrAddAttributeValueByName;
             }
-            catch (Exception ex)
-            {
-                DebugLogs($"Failed to load signature {key}: {ex.Message}");
-            }
+        }
+        catch (Exception ex)
+        {
+            DebugLogs($"Failed to load CAttributeList_SetOrAddAttributeValueByName: {ex.Message}");
         }
 
         Logger.LogWarning("CAttributeList_SetOrAddAttributeValueByName signature not found, custom gloves will not be touched during emotes.");
