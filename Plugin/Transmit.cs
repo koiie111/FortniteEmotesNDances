@@ -23,6 +23,10 @@ public partial class Plugin
 
     private void Hook_CheckTransmit(CCheckTransmitInfoList infoList)
     {
+        if (Config.EmoteHidePlayers == 0 || !g_PlayerSettings.Values.Any(settings => settings.IsDancing))
+            return;
+
+        List<CCSPlayerController>? targets = null;
         foreach ((CCheckTransmitInfo info, CCSPlayerController? player) in infoList)
         {
             if (!player.IsValidPlayer())
@@ -30,23 +34,19 @@ public partial class Plugin
 
             var steamID = player!.SteamID;
 
-            foreach (var target in Utilities.GetPlayers())
+            if (!g_PlayerSettings.TryGetValue(steamID, out var settings) || !settings.IsDancing ||
+                player.Pawn.Value?.As<CCSPlayerPawnBase>().PlayerState == CSPlayerState.STATE_OBSERVER_MODE)
+                continue;
+
+            targets ??= Utilities.GetPlayers();
+            foreach (var target in targets)
             {
                 if (target.IsHLTV || target.Slot == player.Slot)
                     continue;
 
-                var pawn = target.PlayerPawn.Value!;
+                var pawn = target.PlayerPawn.Value;
 
-                if (player.Pawn.Value?.As<CCSPlayerPawnBase>().PlayerState == CSPlayerState.STATE_OBSERVER_MODE)
-                    continue;
-
-                if (pawn == null)
-                    continue;
-
-                if (!g_PlayerSettings.ContainsKey(steamID))
-                    continue;
-
-                if (!g_PlayerSettings[steamID].IsDancing)
+                if (pawn == null || !pawn.IsValid)
                     continue;
 
                 switch (Config.EmoteHidePlayers)

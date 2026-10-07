@@ -166,16 +166,19 @@ public partial class Plugin
             return false;
         }
 
+        // Snapshot mutable API/config data: the deferred callback must use the model we checked.
+        string emoteModel = emote.Model;
+        string animationName = emote.AnimationName;
+        if (!IsModelAvailable(emoteModel) || !IsModelAvailable(CameraModel))
+        {
+            error = $" {Localizer.ForPlayer(target, "emote.prefix")} {Localizer.ForPlayer(target, "emote.modelmissing")}";
+            return false;
+        }
+
         if (g_PlayerSettings[steamID].IsDancing)
         {
             DebugLogs("Player already dancing, stopping emote");
             StopEmote(target);
-        }
-
-        if (!IsModelAvailable(emote.Model))
-        {
-            error = $" {Localizer.ForPlayer(player, "emote.prefix")} {Localizer.ForPlayer(player, "emote.modelmissing")}";
-            return false;
         }
 
         var prop = Utilities.CreateEntityByName<CDynamicProp>("prop_dynamic");
@@ -217,11 +220,20 @@ public partial class Plugin
 
         Server.NextWorldUpdate(() =>
         {
-            if (prop == null || !prop.IsValid) return;
+            if (!prop.IsValid || !target.IsValidPlayer() || !target.PlayerPawn.IsValidPawnAlive() ||
+                !g_PlayerSettings.TryGetValue(steamID, out var current) || !current.IsDancing ||
+                current.CloneProp != prop) return;
 
-            prop.SetModel(emote.Model);
+            if (!IsModelAvailable(emoteModel))
+            {
+                StopEmote(target);
+                target.PrintToChat($" {Localizer.ForPlayer(target, "emote.prefix")} {Localizer.ForPlayer(target, "emote.modelmissing")}");
+                return;
+            }
 
-            prop.AcceptInput("SetAnimation", value: emote.AnimationName);
+            prop.SetModel(emoteModel);
+
+            prop.AcceptInput("SetAnimation", value: animationName);
         });
 
         if (!string.IsNullOrEmpty(emote.DefaultAnimationName))
@@ -231,9 +243,10 @@ public partial class Plugin
                 g_PlayerSettings[steamID].DefaultAnimTimer?.Kill();
                 g_PlayerSettings[steamID].DefaultAnimTimer = AddTimer(emote.SetToDefaultAnimationDuration, () =>
                 {
-                    if (!target.IsValidPlayer() || !g_PlayerSettings[steamID].IsDancing)
+                    if (!target.IsValidPlayer() || !prop.IsValid ||
+                        !g_PlayerSettings.TryGetValue(steamID, out var current) ||
+                        !current.IsDancing || current.CloneProp != prop)
                     {
-                        g_PlayerSettings[steamID].Reset();
                         return;
                     }
 
@@ -242,9 +255,9 @@ public partial class Plugin
                     if (emote.AnimationDuration > 0)
                     {
                         g_PlayerSettings[steamID].Timer?.Kill();
-                        g_PlayerSettings[steamID].Timer = AddTimer(emote.AnimationDuration, () => StopEmote(target));
+                        g_PlayerSettings[steamID].Timer = AddTimer(emote.AnimationDuration, () => StopEmote(target), TimerFlags.STOP_ON_MAPCHANGE);
                     }
-                });
+                }, TimerFlags.STOP_ON_MAPCHANGE);
             }
             else
             {
@@ -254,7 +267,7 @@ public partial class Plugin
         else if (emote.AnimationDuration > 0)
         {
             g_PlayerSettings[steamID].Timer?.Kill();
-            g_PlayerSettings[steamID].Timer = AddTimer(emote.AnimationDuration, () => StopEmote(target));
+            g_PlayerSettings[steamID].Timer = AddTimer(emote.AnimationDuration, () => StopEmote(target), TimerFlags.STOP_ON_MAPCHANGE);
         }
         else
         {
@@ -290,19 +303,23 @@ public partial class Plugin
             {
                 DebugLogs("SoundPlayed: " + emote.Sound);
                 EmitSound(target, emote.Sound, emote.SoundVolume);
-                if (emote.LoopSoundAfterSeconds > 0)
+                if (float.IsFinite(emote.LoopSoundAfterSeconds) && emote.LoopSoundAfterSeconds > 0)
                 {
-                    g_PlayerSettings[steamID].SoundTimer = AddTimer(emote.LoopSoundAfterSeconds, () =>
+                    CSSTimer? soundTimer = null;
+                    soundTimer = AddTimer(Math.Max(0.25f, emote.LoopSoundAfterSeconds), () =>
                     {
-                        if (!target.IsValidPlayer() || !g_PlayerSettings[steamID].IsDancing)
+                        if (!target.IsValidPlayer() || !prop.IsValid ||
+                            !g_PlayerSettings.TryGetValue(steamID, out var current) ||
+                            !current.IsDancing || current.CloneProp != prop)
                         {
-                            g_PlayerSettings[steamID].Reset();
+                            soundTimer?.Kill();
                             return;
                         }
 
                         DebugLogs("SoundPlayed: " + emote.Sound);
                         EmitSound(target, emote.Sound, emote.SoundVolume);
                     }, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE);
+                    g_PlayerSettings[steamID].SoundTimer = soundTimer;
                 }
             }
         }
@@ -542,11 +559,6 @@ public partial class Plugin
             }
         }
 
-        var emoteModels = Utilities.FindAllEntitiesByDesignerName<CDynamicProp>("prop_dynamic").Where(p => p != null
-        && p.IsValid
-        && ((settings.EmoteModelIndex != 0 && p.Index == settings.EmoteModelIndex) || (settings.CloneModelIndex != 0 && p.Index == settings.CloneModelIndex) || (settings.CameraPropIndex != 0 && p.Index == settings.CameraPropIndex))
-        ).ToList();
-
         ResetCam(player);
 
         // SetPlayerWeaponVisible(player);
@@ -563,7 +575,7 @@ public partial class Plugin
 
         RestorePlayerGloves(player);
 
-        var activeWeapon = player.PlayerPawn.Value!.WeaponServices!.ActiveWeapon.Value;
+        var activeWeapon = player.PlayerPawn.Value?.WeaponServices?.ActiveWeapon.Value;
 
         if (activeWeapon != null && activeWeapon.IsValid)
         {
@@ -578,15 +590,7 @@ public partial class Plugin
         g_PlayerSettings[steamID].CameraProp = null;
         g_PlayerSettings[steamID].CloneProp = null;
 
-        foreach (var model in emoteModels)
-        {
-            if (model != null && model.IsValid && model.Entity != null && (g_PlayerSettings[steamID].EmoteModelIndex == model.Index || g_PlayerSettings[steamID].CloneModelIndex == model.Index || g_PlayerSettings[steamID].CameraPropIndex == model.Index))
-            {
-                // player.PlayerPawn.Value?.AcceptInput("ClearParent", player.PlayerPawn.Value, player.PlayerPawn.Value, model.Entity.Name);
-                // player.PlayerPawn.Value?.AcceptInput("StopFollowingEntity", player.PlayerPawn.Value, player.PlayerPawn.Value, model.Entity.Name);
-                model.Remove();
-            }
-        }
+        RemoveEmoteEntities(settings);
         g_PlayerSettings[steamID].EmoteModelIndex = 0;
         g_PlayerSettings[steamID].CloneModelIndex = 0;
         g_PlayerSettings[steamID].CameraPropIndex = 0;
@@ -642,6 +646,9 @@ public partial class Plugin
         if (!player.IsValidPlayer() || !player.PlayerPawn.IsValidPawnAlive() || player.AbsOrigin == null || player.PlayerPawn.Value!.CameraServices == null)
             return null;
 
+        if (!IsModelAvailable(CameraModel))
+            return null;
+
         var prop = Utilities.CreateEntityByName<CDynamicProp>("prop_dynamic");
         if (prop == null)
             return null;
@@ -651,7 +658,7 @@ public partial class Plugin
         prop.Entity!.Name = "cameraProp_" + new Random().Next(1000000, 9999999).ToString();
         prop.CBodyComponent!.SceneNode!.Owner!.Entity!.Flags &= unchecked((uint)~(1 << 2));
 
-        prop.SetModel("models/chicken/chicken.vmdl");
+        prop.SetModel(CameraModel);
 
         SetPropInvisible(prop);
 

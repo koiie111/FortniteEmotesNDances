@@ -18,6 +18,13 @@ public partial class Plugin
     private readonly ConcurrentDictionary<ulong, Task<AccessCacheEntry>> _accessLoads = new();
     private string _databaseConnectionString = "";
     private volatile bool _databaseAvailable;
+    private sealed class PendingAccessAction(Action action)
+    {
+        internal Action Action = action;
+    }
+    // Game-thread only. Repeated commands while the first query is pending replace the requested
+    // action instead of queuing an unbounded burst of menus, props, chat and sound on completion.
+    private readonly Dictionary<ulong, PendingAccessAction> _pendingAccessActions = new();
 
     private void InitializeDatabaseAccess()
     {
@@ -39,7 +46,7 @@ public partial class Plugin
         _accessLoads.Clear();
 
         // Never touch the database on the game thread: a slow query stalls the tick and
-        // the engine drops clients with NETWORK_DISCONNECT_OVERFLOW.
+        // can contribute to network backlogs and disconnects.
         Task.Run(() =>
         {
             try
@@ -52,7 +59,12 @@ public partial class Plugin
                 _databaseAvailable = true;
                 Logger.LogInformation("Database access checks initialized using table {Table}.", AccessTable);
 
-                Server.NextWorldUpdate(PrefetchAccessForConnectedPlayers);
+                if (!_pluginUnloading)
+                    Server.NextWorldUpdate(() =>
+                    {
+                        if (!_pluginUnloading)
+                            PrefetchAccessForConnectedPlayers();
+                    });
             }
             catch (Exception exception)
             {
@@ -86,7 +98,20 @@ public partial class Plugin
     {
         var player = @event.Userid;
         if (player != null && player.IsValid)
+        {
             _accessCache.TryRemove(player.SteamID, out _);
+            _pendingAccessActions.Remove(player.SteamID);
+            if (g_PlayerSettings.TryGetValue(player.SteamID, out var settings))
+            {
+                if (player.PlayerPawn.IsValidPawnAlive())
+                    StopEmote(player);
+                RemoveEmoteEntities(settings);
+                settings.Reset();
+                g_PlayerSettings.Remove(player.SteamID);
+            }
+            playerWeapons.Remove(player.Slot);
+            playerItems.Remove(player.Slot);
+        }
 
         return HookResult.Continue;
     }
@@ -156,6 +181,8 @@ public partial class Plugin
     /// </summary>
     private void WithPlayerAccess(CCSPlayerController player, Action action)
     {
+        if (_pluginUnloading)
+            return;
         var steamId = player.SteamID;
 
         if (!_databaseAvailable || steamId == 0 || _accessCache.ContainsKey(steamId))
@@ -165,12 +192,25 @@ public partial class Plugin
             return;
         }
 
+        if (_pendingAccessActions.TryGetValue(steamId, out var pending))
+        {
+            pending.Action = action;
+            return;
+        }
+        pending = new PendingAccessAction(action);
+        _pendingAccessActions.Add(steamId, pending);
         LoadAccessAsync(steamId).ContinueWith(_ =>
         {
+            if (_pluginUnloading)
+                return;
             Server.NextWorldUpdate(() =>
             {
+                if (_pluginUnloading || !_pendingAccessActions.TryGetValue(steamId, out var current) ||
+                    !ReferenceEquals(current, pending))
+                    return;
+                _pendingAccessActions.Remove(steamId);
                 if (player.IsValid && player.SteamID == steamId)
-                    action();
+                    pending.Action();
             });
         });
     }

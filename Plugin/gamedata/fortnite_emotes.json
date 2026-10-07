@@ -1,4 +1,10 @@
 {
+	"FortniteEmotes_IFileSystem_FileExists": {
+		"offsets": {
+			"windows": 21,
+			"linux": 21
+		}
+	},
 	"CBaseEntity_CollisionRulesChanged": {
 		"offsets": {
 			"windows": 188,

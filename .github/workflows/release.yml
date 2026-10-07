@@ -39,6 +39,9 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      - name: Test model safety
+        run: dotnet test Tests/FortniteEmotes.Tests.csproj -c Release
+
       - name: Publish plugin
         run: dotnet publish Plugin/FortniteEmotesNDances.csproj -c Release -p:Version=${VERSION}
 

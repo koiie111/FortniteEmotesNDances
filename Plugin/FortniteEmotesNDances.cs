@@ -25,7 +25,7 @@ public partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
 
     public required PluginConfig Config { get; set; } = new();
 
-    private List<string> g_CancelButtons = new();
+    private PlayerButtons g_CancelButtons;
 
     private Dictionary<ulong, PlayerSettings> g_PlayerSettings = new();
 
@@ -36,6 +36,7 @@ public partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
     private Dictionary<string, string> g_EmoteTransMap = new();
 
     private bool g_bRoundEnd = false;
+    private volatile bool _pluginUnloading;
 
     private CCSGameRules? g_GameRules = null;
 
@@ -55,10 +56,13 @@ public partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
         LoadBundledEmoteCatalog(config);
         Config = config;
 
+        if (!Config.EmoteModelCheck)
+            Logger.LogWarning("EmoteModelCheck is disabled. SetModel can use missing or unmounted resources; enable this check for model safety.");
+
         g_EmoteTransMap = new();
         g_ChatTriggers = new();
         g_ListChatTriggers = new();
-        g_CancelButtons = new();
+        g_CancelButtons = 0;
 
         foreach (var emote in Config.EmoteDances)
         {
@@ -222,30 +226,30 @@ public partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
         foreach (var button in buttons)
         {
             if (button.Equals("w", StringComparison.CurrentCultureIgnoreCase))
-                g_CancelButtons.Add(PlayerButtons.Forward.ToString());
+                g_CancelButtons |= PlayerButtons.Forward;
             else if (button.Equals("s", StringComparison.CurrentCultureIgnoreCase))
-                g_CancelButtons.Add(PlayerButtons.Back.ToString());
+                g_CancelButtons |= PlayerButtons.Back;
             else if (button.Equals("a", StringComparison.CurrentCultureIgnoreCase))
-                g_CancelButtons.Add(PlayerButtons.Moveleft.ToString());
+                g_CancelButtons |= PlayerButtons.Moveleft;
             else if (button.Equals("d", StringComparison.CurrentCultureIgnoreCase))
-                g_CancelButtons.Add(PlayerButtons.Moveright.ToString());
+                g_CancelButtons |= PlayerButtons.Moveright;
             else if (button.Equals("use", StringComparison.CurrentCultureIgnoreCase))
-                g_CancelButtons.Add(PlayerButtons.Use.ToString());
+                g_CancelButtons |= PlayerButtons.Use;
             else if (button.Equals("speed", StringComparison.CurrentCultureIgnoreCase))
             {
-                g_CancelButtons.Add(PlayerButtons.Speed.ToString());
-                g_CancelButtons.Add(PlayerButtons.Walk.ToString());
+                g_CancelButtons |= PlayerButtons.Speed;
+                g_CancelButtons |= PlayerButtons.Walk;
             }
             else if (button.Equals("jump", StringComparison.CurrentCultureIgnoreCase))
-                g_CancelButtons.Add(PlayerButtons.Jump.ToString());
+                g_CancelButtons |= PlayerButtons.Jump;
             else if (button.Equals("leftclick", StringComparison.CurrentCultureIgnoreCase))
-                g_CancelButtons.Add(PlayerButtons.Attack.ToString());
+                g_CancelButtons |= PlayerButtons.Attack;
             else if (button.Equals("crouch", StringComparison.CurrentCultureIgnoreCase))
-                g_CancelButtons.Add(PlayerButtons.Duck.ToString());
+                g_CancelButtons |= PlayerButtons.Duck;
             else if (button.Equals("scoreboard", StringComparison.CurrentCultureIgnoreCase) && Config.EmoteMenuType != 2)
-                g_CancelButtons.Add(PlayerButtons.Scoreboard.ToString());
+                g_CancelButtons |= PlayerButtons.Scoreboard;
             else if (button.Equals("inspect", StringComparison.CurrentCultureIgnoreCase))
-                g_CancelButtons.Add(PlayerButtons.Inspect.ToString());
+                g_CancelButtons |= PlayerButtons.Inspect;
         }
 
         if (Config.StopDamageWhenInEmote && IsCS2FixesInstalled())
@@ -267,6 +271,7 @@ public partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
     {
         base.Load(hotReload);
         RegisterListener<Listeners.OnMapStart>(OnMapStart);
+        RegisterListener<Listeners.OnMapEnd>(ResetModelCheck);
         RegisterListener<Listeners.OnTick>(OnTick);
         RegisterListener<Listeners.OnServerPrecacheResources>(OnServerPrecacheResources);
 
@@ -296,15 +301,20 @@ public partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
 
     public override void Unload(bool hotReload)
     {
+        _pluginUnloading = true;
+        _pendingAccessActions.Clear();
         base.Unload(hotReload);
 
         Transmit_OnUnload();
 
         StopAllEmotes();
 
+        DisposeModelCheck();
+
         RemoveAllCommands();
 
         RemoveListener<Listeners.OnMapStart>(OnMapStart);
+        RemoveListener<Listeners.OnMapEnd>(ResetModelCheck);
         RemoveListener<Listeners.OnTick>(OnTick);
         RemoveListener<Listeners.OnServerPrecacheResources>(OnServerPrecacheResources);
 
@@ -447,13 +457,13 @@ public partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
 
     public void OnMapStart(string map)
     {
+        foreach (var settings in g_PlayerSettings.Values)
+            settings.Reset();
         g_PlayerSettings = new();
 
         g_GameRules = null;
 
         EmitSoundExtension.ClearSounds();
-
-        StartModelCheck();
 
         playerWeapons.Clear();
 
@@ -463,12 +473,15 @@ public partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
 
         AddTimer(1.0f, () =>
         {
-            g_GameRules = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").First().GameRules!;
-        });
+            g_GameRules = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules;
+        }, CounterStrikeSharp.API.Modules.Timers.TimerFlags.STOP_ON_MAPCHANGE);
     }
 
     public void OnTick()
     {
+        if (!g_PlayerSettings.Values.Any(settings => settings.IsDancing))
+            return;
+
         foreach (var player in Utilities.GetPlayers().Where(p => !p.IsHLTV && !p.IsBot))
         {
             var steamID = player.SteamID;
@@ -501,7 +514,7 @@ public partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
 
                 if (Config.EmoteMenuType != 2 || (Config.EmoteMenuType == 2 && (Menu.GetMenus(player) == null || Menu.GetMenus(player)?.Count <= 0)))
                 {
-                    if (g_CancelButtons.Any(button => player.Buttons.ToString().Contains(button)))
+                    if ((player.Buttons & g_CancelButtons) != 0)
                     {
                         StopEmote(player);
                         continue;
@@ -553,19 +566,19 @@ public partial class Plugin : BasePlugin, IPluginConfig<PluginConfig>
             resource.AddResource(sefile);
         }
 
-        List<string> precachedModels = new();
-
-        foreach (var emote in Config.EmoteDances)
+        ResetModelCheck();
+        foreach (var model in Config.EmoteDances.Select(emote => emote.Model).Append(CameraModel).Distinct(StringComparer.Ordinal))
         {
-            if (precachedModels.Contains(emote.Model))
+            if (!_models.Register(model, IsMountedModel, resource.AddResource))
+            {
+                if (!Config.EmoteModelCheck && ModelAvailability.IsValidPath(model))
+                    resource.AddResource(model);
+                else
+                    IsModelAvailable(model); // Log once, before any attempt to create props.
                 continue;
-
-            DebugLogs("Precaching model: " + emote.Model);
-            resource.AddResource(emote.Model);
-            precachedModels.Add(emote.Model);
+            }
+            DebugLogs("Precaching model: " + model);
         }
-
-        resource.AddResource("models/chicken/chicken.vmdl"); // Needs precache in non-competitive maps
     }
 
     [ConsoleCommand("css_et", "Displays all chat triggers for emotes/dance")]

@@ -2,6 +2,7 @@ using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Attributes.Registration;
 using CounterStrikeSharp.API.Modules.Cvars;
+using CounterStrikeSharp.API.Modules.Timers;
 
 namespace FortniteEmotes;
 
@@ -40,7 +41,7 @@ public partial class Plugin
         g_bRoundEnd = true;
 
         var roundRestartDelay = ConVar.Find("mp_round_restart_delay")?.GetPrimitiveValue<float>() ?? 7.0f;
-        AddTimer(roundRestartDelay - 0.2f, () =>
+        AddTimer(Math.Max(0.1f, roundRestartDelay - 0.2f), () =>
         {
             foreach (var settings in g_PlayerSettings)
             {
@@ -54,7 +55,7 @@ public partial class Plugin
                     }
                 }
             }
-        });
+        }, TimerFlags.STOP_ON_MAPCHANGE);
         return HookResult.Continue;
     }
 
